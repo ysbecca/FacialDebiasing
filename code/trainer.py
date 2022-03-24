@@ -130,7 +130,7 @@ class Trainer:
         # Start training and validation cycle
         for epoch in range(epochs):
             epoch_start_t = datetime.now()
-            logger.info(f"Starting epoch: {epoch+1}/{epochs}")
+            # logger.info(f"Starting epoch: {epoch+1}/{epochs}")
 
             self._update_sampling_histogram(epoch)
 
@@ -138,14 +138,14 @@ class Trainer:
             train_loss, train_acc = self._train_epoch()
             # train_loss, train_acc = 0, 0
             epoch_train_t = datetime.now() - epoch_start_t
-            logger.info(f"epoch {epoch+1}/{epochs}::Training done")
+            # logger.info(f"epoch {epoch+1}/{epochs}::Training done")
             logger.info(f"epoch {epoch+1}/{epochs} => train_loss={train_loss:.2f}, train_acc={train_acc:.2f}")
 
             # Validation
             logger.info("Starting validation")
             val_loss, val_acc = self._eval_epoch(epoch)
             epoch_val_t = datetime.now() - epoch_start_t
-            logger.info(f"epoch {epoch+1}/{epochs}::Validation done")
+            # logger.info(f"epoch {epoch+1}/{epochs}::Validation done")
             logger.info(f"epoch {epoch+1}/{epochs} => val_loss={val_loss:.2f}, val_acc={val_acc:.2f}")
 
             # Print reconstruction
@@ -209,7 +209,7 @@ class Trainer:
         path_to_model = f"results/{self.run_folder}/model.pt"
         torch.save(self.model.state_dict(), path_to_model)
 
-        logger.save(f"Stored model and results at results/{self.run_folder}")
+        # logger.save(f"Stored model and results at results/{self.run_folder}")
 
     def visualize_bias(self, probs, data_loader, all_labels, all_index, epoch, n_rows=3):
         # TODO: Add annotation
