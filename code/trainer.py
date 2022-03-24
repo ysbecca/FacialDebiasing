@@ -260,7 +260,7 @@ class Trainer:
 
         samples = len(preds_c)
 
-        targets = self.val_targets[:samples].cpu().numpy()
+        targets = np.array(self.val_targets[:samples])
 
         # bias amplification score
          # [preds[COLOR_MODE], preds[GRAY_MODE]]
