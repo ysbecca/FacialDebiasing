@@ -260,7 +260,7 @@ class Trainer:
 
         samples = len(preds_c)
 
-        targets = self.val_targets[:samples]
+        targets = self.val_targets[:samples].cpu().numpy()
 
         # bias amplification score
          # [preds[COLOR_MODE], preds[GRAY_MODE]]
@@ -303,7 +303,7 @@ class Trainer:
                 # if i > 3:
                     # break
 
-        return loss, acc, torch.argmax(all_preds, axis=1)
+        return loss, acc, torch.argmax(all_preds, axis=1).cpu().numpy()
 
 
     def _train_epoch(self):

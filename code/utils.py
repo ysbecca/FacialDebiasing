@@ -50,13 +50,14 @@ def compute_odds_opps(preds, targets):
         coloring.extend([0]*len(targets))
         # if c % 2 == 0: # even means it is a primarily gray class
 
+
+
         all_class_odds = []
         all_stats = []
         for c in range(10):
             stats  = perf_measure(
                 np.concatenate((
-                    np.array(targets), 
-                    np.array(targets),
+                    targets, targets,
                 )),
                 np.concatenate((
                     preds[0],
