@@ -12,6 +12,8 @@ from datasets.data_utils import DataLoaderTuple, DatasetOutput
 import utils
 from dataset import make_hist_loader, make_train_and_valid_loaders, concat_datasets, sample_dataset
 
+import numpy as np
+
 from torchvision.utils import make_grid
 from matplotlib import pyplot as plt
 
