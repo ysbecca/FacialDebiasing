@@ -136,7 +136,7 @@ def make_train_and_valid_loaders(
         transforms.Normalize(mean=CIFAR_MEAN, std=CIFAR_STD)
     ])
 
-    CIFAR_DIR = "/Users/ysbecca/ysbecca-projects/bayesian-bias/data/"
+    CIFAR_DIR = "/users/rsstone/projects_sym/rsstone/bayesian-bias/data/"
 
     # skewed set
     # minority set ("cifar_m_train_imgs", "cifar_train_labels"),
