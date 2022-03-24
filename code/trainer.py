@@ -135,8 +135,8 @@ class Trainer:
             self._update_sampling_histogram(epoch)
 
             # Training
-            # train_loss, train_acc = self._train_epoch()
-            train_loss, train_acc = 0, 0
+            train_loss, train_acc = self._train_epoch()
+            # train_loss, train_acc = 0, 0
             epoch_train_t = datetime.now() - epoch_start_t
             logger.info(f"epoch {epoch+1}/{epochs}::Training done")
             logger.info(f"epoch {epoch+1}/{epochs} => train_loss={train_loss:.2f}, train_acc={train_acc:.2f}")
