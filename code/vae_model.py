@@ -47,7 +47,7 @@ class Encoder(nn.Module):
             nn.Linear(512, 1000),
             nn.LeakyReLU(),
 
-            nn.Linear(1000, z_dim*2+1)
+            nn.Linear(1000, z_dim*2+10)
         )
 
 
@@ -57,9 +57,11 @@ class Encoder(nn.Module):
         """
 
         out = self.layers(input)
+        # print(out.shape)
+        # exit()
 
         # return classification, mean and log_std
-        return out[:, 0], out[:, 1:self.z_dim+1], F.softplus(out[:,self.z_dim+1:])
+        return out[:, :10], out[:, 10:self.z_dim+10], F.softplus(out[:,10+self.z_dim:])
 
 
 class UnFlatten(nn.Module):
@@ -184,22 +186,22 @@ class Db_vae(nn.Module):
         """
         pred, mean, std = self.encoder(images)
 
-        loss_class = F.binary_cross_entropy_with_logits(pred, labels.float(), reduction='none')
+        loss_class = F.cross_entropy(pred, labels.long(), reduction='none')
 
         # We only want to calculate the loss towards actual faces
-        faceslicer = labels == 1
-        facemean = mean[faceslicer]
-        facestd = std[faceslicer]
+        # faceslicer = labels == 1
+        # facemean = mean[faceslicer]
+        # facestd = std[faceslicer]
 
         # Get single samples from the distributions with reparametrisation trick
-        dist = torch.distributions.normal.Normal(facemean, facestd)
+        dist = torch.distributions.normal.Normal(mean, std)
         z = dist.rsample().to(self.device)
 
         res = self.decoder(z)
 
 
         # calculate VAE losses
-        loss_recon = (images[faceslicer] - res)**2
+        loss_recon = (images - res)**2
         loss_recon = loss_recon.view(loss_recon.shape[0],-1).mean(1)
 
         loss_kl = torch.distributions.kl.kl_divergence(dist, self.target_dist)
@@ -209,8 +211,8 @@ class Db_vae(nn.Module):
         loss_total = self.c1 * loss_class
 
         # Only add loss to positions of faces, rest is zero
-        zeros = torch.zeros(faceslicer.shape[0]).to(self.device)
-        zeros[faceslicer] = loss_vae
+        zeros = torch.zeros(len(images)).to(self.device)
+        zeros = loss_vae
 
         loss_total = loss_total + zeros
 

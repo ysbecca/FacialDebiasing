@@ -10,6 +10,7 @@ import torch
 from logger import logger
 import utils
 import torch.nn as nn
+
 from datasets.data_utils import slide_windows_over_img
 from dataclasses import asdict
 import os
@@ -94,7 +95,12 @@ if __name__ == "__main__":
           logger.info("Running training only")
           trainer = make_trainer(config)
           trainer.train()
+
      elif config.run_mode == 'eval':
+
+          # TODO do my own eval here...
+
+
           logger.info("Running evaluation only")
           evaluator = make_evaluator(config)
           evaluator.eval_on_setups('run_mode')

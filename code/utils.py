@@ -14,9 +14,120 @@ from PIL import Image
 
 from dataset import sample_dataset, sample_idxs_from_loader, sample_idxs_from_loaders
 
+
+# bias amplification score
+def compute_bias_amplification(preds, targets, num_classes=10):
+
+    # gr_c how many gray scale test images to be predicted of class c
+    corr_by_color = {}
+    # color, gray
+    for mode, pred in zip(["color", "gray"], preds):
+        # correct per class
+        corr_by_color[mode] = {i: 0 for i in range(num_classes)}
+
+        for c in range(num_classes):
+            for p, t in zip(pred, targets):
+                if t == c and t == p:
+                    corr_by_color[mode][t] += 1
+
+    scores = []
+    for c in range(num_classes):
+        gr_c = corr_by_color["color"][c]
+        col_c = corr_by_color["gray"][c]
+
+        # prevent division by zero for dev_run passes
+        denom = max(gr_c + col_c, 1.0)
+        scores.append(max(gr_c, col_c) / denom)
+
+    return (np.array(scores).sum() / num_classes) - 0.5
+
+
+# equality of odds and opportunity
+def compute_odds_opps(preds, targets):
+
+        # opps --> equality for the "advantageous" outcome  
+        coloring = [1]*len(targets)
+        coloring.extend([0]*len(targets))
+        # if c % 2 == 0: # even means it is a primarily gray class
+
+        all_class_odds = []
+        all_stats = []
+        for c in range(10):
+            stats  = perf_measure(
+                np.concatenate((
+                    np.array(targets), 
+                    np.array(targets),
+                )),
+                np.concatenate((
+                    preds[0],
+                    preds[1]
+                )),
+                coloring,
+                c
+            )
+
+            a1_stats, a0_stats = stats
+            all_class_odds.append(
+                np.abs((a1_stats[0] / (a1_stats[0] + a1_stats[3])) - (a0_stats[0] / (a0_stats[0] + a0_stats[3])))
+            )
+
+            all_stats.append(stats)
+
+        all_stats = np.array(all_stats)
+        class_odds = np.array(all_class_odds).sum() / 10.
+        stats = np.sum(all_stats, axis=0) / 10.
+        a1_stats, a0_stats = stats
+
+        # a = 1 TP, FP, TN, FN, a = 0 TP, FP, TN, FN
+        class_opps = 0.5 * (np.abs(a1_stats[1] - a0_stats[1]) + np.abs(a1_stats[0] - a0_stats[0]))
+        class_opps /= 10.
+
+        return class_odds, class_opps
+
+
+
+
+def perf_measure(y_actual, y_hat, coloring, c):
+    """
+    coloring 1 - color
+             0 - gray
+    """
+
+    # a = 1 TP, FP, TN, FN, a = 0 TP, FP, TN, FN
+    stats = [[0, 0, 0, 0], [0, 0, 0, 0]]
+
+    # count for a = 1 and a = 0, separately.
+    for i in range(len(y_hat)):
+        if y_actual[i] % 2 == 0:
+            # it's an even class so gray is majority, colour is a = 1
+            index = 0 if coloring[i] else 1
+        else:
+            # it's an odd class so color is majority, gray is minority a = 0
+            index = 1 if coloring[i] else 0
+
+        # set value
+        if y_actual[i] == y_hat[i] and y_actual[i] == c:
+            stats[index][0] += 1
+        if (y_hat[i] == c) and (y_actual[i] != y_hat[i]):
+            stats[index][1] += 1
+        if y_actual[i] == y_hat[i] and y_actual[i] != c:
+            stats[index][2] += 1
+        if y_hat[i] != c and y_actual[i] == c:
+            stats[index][3] += 1
+
+    # return (TPa, FPa, TNa, FNa, TP, FP, TN, FN)
+    return stats
+
+
+
+
 def calculate_accuracy(labels, pred):
     """Calculates accuracy given labels and predictions."""
-    return float(((pred > 0) == (labels > 0)).sum()) / labels.size()[0]
+    # print(torch.argmax(pred, axis=1))
+    # print(labels)
+    # exit()
+
+    return float((torch.argmax(pred, axis=1) == labels).sum()) / labels.size()[0]
 
 def get_best_and_worst_predictions(labels, pred, device):
     """Returns indices of the best and worst predicted faces."""

@@ -67,17 +67,20 @@ class Trainer:
 
         self.optimizer = optimizer(params=self.model.parameters(), lr=lr)
 
-        train_loaders: DataLoaderTuple
-        valid_loaders: DataLoaderTuple
+        train_loader: DataLoader
+        valid_loader: DataLoader
 
-        train_loaders, valid_loaders = make_train_and_valid_loaders(
+        train_loader, valid_loader_color, valid_loader_gray, val_targets = make_train_and_valid_loaders(
             batch_size=batch_size,
             max_images=max_images,
             **kwargs
         )
 
-        self.train_loaders = train_loaders
-        self.valid_loaders = valid_loaders
+        self.val_targets = val_targets
+
+        self.train_loader = train_loader
+        self.valid_loader_color = valid_loader_color
+        self.valid_loader_gray = valid_loader_gray
 
     def init_model(self):
         # If model is loaded from file-system
@@ -130,7 +133,8 @@ class Trainer:
             self._update_sampling_histogram(epoch)
 
             # Training
-            train_loss, train_acc = self._train_epoch()
+            # train_loss, train_acc = self._train_epoch()
+            train_loss, train_acc = 0, 0
             epoch_train_t = datetime.now() - epoch_start_t
             logger.info(f"epoch {epoch+1}/{epochs}::Training done")
             logger.info(f"epoch {epoch+1}/{epochs} => train_loss={train_loss:.2f}, train_acc={train_acc:.2f}")
@@ -143,8 +147,9 @@ class Trainer:
             logger.info(f"epoch {epoch+1}/{epochs} => val_loss={val_loss:.2f}, val_acc={val_acc:.2f}")
 
             # Print reconstruction
-            valid_data = concat_datasets(self.valid_loaders.faces.dataset, self.valid_loaders.nonfaces.dataset, proportion_a=0.5)
-            self.print_reconstruction(self.model, valid_data, epoch, self.device)
+            # TODO do I need this....
+            # valid_data = concat_datasets(self.valid_loaders.faces.dataset, self.valid_loaders.nonfaces.dataset, proportion_a=0.5)
+            # self.print_reconstruction(self.model, valid_data, epoch, self.device)
 
             # Save model and scores
             self._save_epoch(epoch, train_loss, val_loss, train_acc, val_acc)
@@ -235,25 +240,55 @@ class Trainer:
 
     def _eval_epoch(self, epoch):
         """Calculates the validation error of the model."""
-        face_loader, nonface_loader = self.valid_loaders
 
         self.model.eval()
         avg_loss = 0
         avg_acc = 0
 
-        all_labels = torch.tensor([], dtype=torch.long).to(self.device)
-        all_preds = torch.tensor([]).to(self.device)
-        all_idxs = torch.tensor([], dtype=torch.long).to(self.device)
+        # all_labels = torch.tensor([], dtype=torch.long).to(self.device)
+        # all_preds = torch.tensor([]).to(self.device)
+        # all_idxs = torch.tensor([], dtype=torch.long).to(self.device)
 
         count = 0
 
+    
+        loss_c, acc_c, preds_c = self._get_valid_stats(self.valid_loader_color)
+        loss_g, acc_g, preds_g = self._get_valid_stats(self.valid_loader_gray)
+        
+        # best_faces, worst_faces, best_other, worst_other = utils.get_best_and_worst_predictions(all_labels, all_preds, self.device)
+        # self.visualize_best_and_worst(self.valid_loaders, all_labels, all_idxs, epoch, best_faces, worst_faces, best_other, worst_other)
+
+        samples = len(preds_c)
+
+        targets = self.val_targets[:samples]
+
+        # bias amplification score
+         # [preds[COLOR_MODE], preds[GRAY_MODE]]
+        bias_amp = utils.compute_bias_amplification([preds_c, preds_g], targets)
+
+        odds, opps = utils.compute_odds_opps([preds_c, preds_g], targets)
+
+        avg_loss = (loss_c + loss_g) / 2.
+        mean_bias_acc = (acc_c + acc_g) / 2.
+
+        logger.info(f"epoch {epoch+1}::  -----> bias_amp {bias_amp:.4f}, mean_acc {mean_bias_acc:.4f}, odds {odds:.4f}, opps {opps:.4f}")
+
+        return avg_loss, mean_bias_acc
+
+
+    def _get_valid_stats(self, loader):
+        avg_loss = 0
+        avg_acc = 0
+        all_preds = torch.tensor([]).to(self.device)
+
         with torch.no_grad():
-            for i, (face_batch, nonface_batch) in enumerate(zip(face_loader, nonface_loader)):
-                images, labels, idxs = utils.concat_batches(face_batch, nonface_batch)
+            # i = 0
+            for batch in loader:
+                images, labels = batch
 
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                idxs = idxs.to(self.device)
+               
                 pred, loss = self.model.forward(images, labels)
 
                 loss = loss.mean()
@@ -262,20 +297,18 @@ class Trainer:
                 avg_loss += loss.item()
                 avg_acc += acc
 
-                all_labels = torch.cat((all_labels, labels))
                 all_preds = torch.cat((all_preds, pred))
-                all_idxs = torch.cat((all_idxs, idxs))
 
-                count = i
+                # i += 1
+                # if i > 3:
+                    # break
 
-        best_faces, worst_faces, best_other, worst_other = utils.get_best_and_worst_predictions(all_labels, all_preds, self.device)
-        self.visualize_best_and_worst(self.valid_loaders, all_labels, all_idxs, epoch, best_faces, worst_faces, best_other, worst_other)
+        return loss, acc, torch.argmax(all_preds, axis=1)
 
-        return avg_loss/(count+1), avg_acc/(count+1)
 
     def _train_epoch(self):
         """Trains the model for one epoch."""
-        face_loader, nonface_loader = self.train_loaders
+        # face_loader, nonface_loader = self.train_loaders
 
         self.model.train()
 
@@ -287,8 +320,11 @@ class Trainer:
         avg_acc: float = 0
         count: int = 0
 
-        for i, (face_batch, nonface_batch) in enumerate(zip(face_loader, nonface_loader)):
-            images, labels, _ = utils.concat_batches(face_batch, nonface_batch)
+        # for i, (face_batch, nonface_batch) in enumerate(zip(face_loader, nonface_loader)):
+        for i, batch in enumerate(self.train_loader):
+            # print(batch)
+            # images, labels, _ = utils.concat_batches(face_batch, nonface_batch)
+            images, labels = batch
             images, labels = images.to(self.device), labels.to(self.device)
 
             # Forward pass
@@ -317,13 +353,13 @@ class Trainer:
         """Updates the data loader for faces to be proportional to how challenge each image is, in case
         debias_type not none is.
         """
-        hist_loader = make_hist_loader(self.train_loaders.faces.dataset, self.batch_size)
+        hist_loader = make_hist_loader(self.train_loader, self.batch_size)
 
         if self.debias_type != 'none':
             hist = self._update_histogram(hist_loader, epoch)
-            self.train_loaders.faces.sampler.weights = hist
+            self.train_loader.sampler.weights = hist
         else:
-            self.train_loaders.faces.sampler.weights = torch.ones(len(self.train_loaders.faces.sampler.weights))
+            self.train_loader.sampler.weights = torch.ones(len(self.train_loader.sampler.weights))
 
 
     def _update_histogram(self, data_loader, epoch):

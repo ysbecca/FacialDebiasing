@@ -7,6 +7,7 @@ from torch.utils.data import ConcatDataset, DataLoader, Dataset, WeightedRandomS
 from torch.utils.data.dataset import Subset
 from torch.utils.data.sampler import RandomSampler
 import h5py
+from torchvision import transforms
 import numpy as np
 from typing import Optional, List, NamedTuple, Union
 from logger import logger
@@ -15,6 +16,7 @@ from datasets.data_utils import CountryEnum, DataLoaderTuple, GenderEnum, SkinCo
 from datasets.celeb_a import CelebDataset
 from datasets.imagenet import ImagenetDataset
 from datasets.ppb import PPBDataset
+from datasets.cifar10s import CIFARDataset
 
 def split_dataset(dataset, train_size: float, random_seed, max_images: Optional[int] = None):
     """Splits a dataset into a certain (maximum) size."""
@@ -101,45 +103,90 @@ def make_train_and_valid_loaders(
     nr_images: Optional[int] = max_images if max_images >= 0 else None
 
     # Create the datasets
-    if use_h5:
-        logger.info("Creating the celeb and imagenet dataset from the h5 file!")
-        celeb_dataset, imagenet_dataset = make_h5_datasets(**kwargs)
-    else:
-        logger.info("Creating the Imagenet and CelebDataset")
-        imagenet_dataset = ImagenetDataset(path_to_images=path_to_imagenet_images, **kwargs)
-        celeb_dataset = CelebDataset(path_to_images=path_to_celeba_images, **kwargs)
+    # if use_h5:
+    #     logger.info("Creating the celeb and imagenet dataset from the h5 file!")
+    #     celeb_dataset, imagenet_dataset = make_h5_datasets(**kwargs)
+    # else:
+    #     logger.info("Creating the Imagenet and CelebDataset")
+    #     imagenet_dataset = ImagenetDataset(path_to_images=path_to_imagenet_images, **kwargs)
+    #     celeb_dataset = CelebDataset(path_to_images=path_to_celeba_images, **kwargs)
 
-    # Split both datasets into training and validation
-    celeb_train, celeb_valid = split_dataset(celeb_dataset, train_size, random_seed, nr_images)
-    imagenet_train, imagenet_valid = split_dataset(imagenet_dataset, train_size, random_seed, nr_images)
-    logger.info(f"Sizes of dataset are:\n"
-                f"Celeb-train: {len(celeb_train)}\n"
-                f"Celeb-valid: {len(celeb_valid)}\n"
-                f"Imagenet-train: {len(imagenet_train)}\n"
-                f"Imagenet-valid: {len(imagenet_valid)}\n")
+    # # Split both datasets into training and validation
+    # celeb_train, celeb_valid = split_dataset(celeb_dataset, train_size, random_seed, nr_images)
+    # imagenet_train, imagenet_valid = split_dataset(imagenet_dataset, train_size, random_seed, nr_images)
+    # logger.info(f"Sizes of dataset are:\n"
+    #             f"Celeb-train: {len(celeb_train)}\n"
+    #             f"Celeb-valid: {len(celeb_valid)}\n"
+    #             f"Imagenet-train: {len(imagenet_train)}\n"
+    #             f"Imagenet-valid: {len(imagenet_valid)}\n")
+    CIFAR_MEAN          = (0.4914, 0.4822, 0.4465)
+    CIFAR_STD           = (0.2023, 0.1994, 0.2010)
 
-    # Nonfaces loaders
-    train_nonfaces_loader: DataLoader = DataLoader(imagenet_train, batch_size=int(batch_size / 2), shuffle=shuffle, num_workers=num_workers)
-    valid_nonfaces_loader: DataLoader = DataLoader(imagenet_valid, batch_size=int(batch_size / 2), shuffle=False, num_workers=num_workers)
+    train_transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(32, padding=4),
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=CIFAR_MEAN, std=CIFAR_STD)
+    ])
 
-    # Init some weights
-    init_weights = torch.rand(len(celeb_train)).tolist()
+    test_transform = transforms.Compose([
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=CIFAR_MEAN, std=CIFAR_STD)
+    ])
 
-    # Define samplers: random for non-debias, weighed for debiasing
-    random_train_sampler = RandomSampler(celeb_train)
-    weights_sampler_train = WeightedRandomSampler(init_weights, len(celeb_train), replacement=sample_bias_with_replacement)
+    CIFAR_DIR = "/Users/ysbecca/ysbecca-projects/bayesian-bias/data/"
+
+    # skewed set
+    # minority set ("cifar_m_train_imgs", "cifar_train_labels"),
+    train_dataset = CIFARDataset(
+        data_path=CIFAR_DIR + "cifar-s/p95.0/train_imgs",
+        label_path=CIFAR_DIR + "cifar_train_labels",
+        transform=train_transform,
+    )
+
+    # validate on color for now...
+    valid_dataset_color = CIFARDataset(
+        data_path=CIFAR_DIR + "cifar_color_test_imgs",
+        label_path=CIFAR_DIR + "cifar_test_labels",
+        transform=test_transform,
+    )
+
+    valid_dataset_gray = CIFARDataset(
+        data_path=CIFAR_DIR + "cifar_gray_test_imgs",
+        label_path=CIFAR_DIR + "cifar_test_labels",
+        transform=test_transform,
+    )
+
+    # # Nonfaces loaders
+    # train_nonfaces_loader: DataLoader = DataLoader(imagenet_train, batch_size=int(batch_size / 2), shuffle=shuffle, num_workers=num_workers)
+    # valid_nonfaces_loader: DataLoader = DataLoader(imagenet_valid, batch_size=int(batch_size / 2), shuffle=False, num_workers=num_workers)
+
+    # # Init some weights
+    init_weights = torch.rand(len(train_dataset)).tolist()
+
+    # # Define samplers: random for non-debias, weighed for debiasing
+    random_train_sampler = RandomSampler(train_dataset)
+    weights_sampler_train = WeightedRandomSampler(init_weights, len(train_dataset), replacement=sample_bias_with_replacement)
 
     train_sampler = weights_sampler_train if enable_debias else random_train_sampler
 
-    # Define the face loaders
-    train_faces_loader: DataLoader = DataLoader(celeb_train, sampler=train_sampler, batch_size=int(batch_size / 2), num_workers=num_workers)
-    valid_faces_loader: DataLoader = DataLoader(celeb_valid, batch_size=int(batch_size / 2), shuffle=shuffle, num_workers=num_workers)
+    # # Define the face loaders
+    # train_faces_loader: DataLoader = DataLoader(celeb_train, sampler=train_sampler, batch_size=int(batch_size / 2), num_workers=num_workers)
+    # valid_faces_loader: DataLoader = DataLoader(celeb_valid, batch_size=int(batch_size / 2), shuffle=shuffle, num_workers=num_workers)
 
-    # Make tuple of the data-loaders
-    train_loaders: DataLoaderTuple = DataLoaderTuple(train_faces_loader, train_nonfaces_loader)
-    valid_loaders: DataLoaderTuple = DataLoaderTuple(valid_faces_loader, valid_nonfaces_loader)
+    # # Make tuple of the data-loaders
+    # train_loaders: DataLoaderTuple = DataLoaderTuple(train_faces_loader, train_nonfaces_loader)
+    # valid_loaders: DataLoaderTuple = DataLoaderTuple(valid_faces_loader, valid_nonfaces_loader)
 
-    return train_loaders, valid_loaders
+    # load the cifar-10S data here
+    train_loader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size, num_workers=num_workers)
+    valid_loader_color = DataLoader(valid_dataset_color, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+    valid_loader_gray = DataLoader(valid_dataset_gray, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+
+    return train_loader, valid_loader_color, valid_loader_gray, valid_dataset_color.targets
+
 
 class EvalDatasetType(Enum):
     """Defines a enumerator the makes it possible to double check dataset types."""

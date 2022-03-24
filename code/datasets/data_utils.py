@@ -44,10 +44,14 @@ class DatasetOutput(NamedTuple):
     idx: int
     sub_images: Optional[torch.Tensor] = None
 
+CIFAR_MEAN          = (0.4914, 0.4822, 0.4465)
+CIFAR_STD           = (0.2023, 0.1994, 0.2010)
+
 # Default transform
 default_transform = transforms.Compose([
     transforms.Resize((64, 64)),
-    transforms.ToTensor()
+    transforms.ToTensor(),
+    transforms.Normalize(mean=CIFAR_MEAN, std=CIFAR_STD)
 ])
 
 

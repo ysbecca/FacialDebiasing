@@ -88,6 +88,9 @@ def create_run_folder(folder_name):
 
     return create_folder_name(str(datetime.datetime.now().strftime("%d_%m_%Y---%H_%M_%S")))
 
+
+ROOT_DIR = "/Users/ysbecca/ysbecca-projects/bayesian-bias/"
+
 @dataclass
 class Config:
     # Running main for train, eval or both
@@ -95,17 +98,17 @@ class Config:
     # Folder name of the run
     run_folder: str = '' if ARGS.folder_name is None else ARGS.folder_name
     # Path to CelebA images
-    path_to_celeba_images: str = 'data/celeba/images'
+    path_to_celeba_images: str = ROOT_DIR + 'data/celeba/img_align_celeba/img_align_celeba/'
     # Path to CelebA bounding-boxes
-    path_to_celeba_bbox_file: str = 'data/celeba/list_bbox_celeba.txt'
+    path_to_celeba_bbox_file: str = ROOT_DIR + 'data/celeba/list_bbox_celeba.txt'
     # Path to ImageNet images
-    path_to_imagenet_images: str = 'data/imagenet'
+    path_to_imagenet_images: str = ROOT_DIR + 'data/imagenet_noface/images/imagenet_images/'
     # Path to evaluation images (Faces)
-    path_to_eval_face_images: str = 'data/ppb/PPB-2017/imgs'
+    path_to_eval_face_images: str = ROOT_DIR + 'data/fairface/images'
     # Path to evaluation metadata
-    path_to_eval_metadata: str = 'data/ppb/PPB-2017/PPB-2017-metadata.csv'
+    path_to_eval_metadata: str = ROOT_DIR + 'data/fairface/fairface_label_val.csv'
     # Path to evaluation images (Nonfaces such as Imagenet)
-    path_to_eval_nonface_images: str = 'data/imagenet'
+    path_to_eval_nonface_images: str = ROOT_DIR + 'data/imagenet_noface/images/imagenet_images/'
     # Path to stored model
     path_to_model: Optional[str] = ARGS.path_to_model
     # Path to h5
@@ -129,7 +132,7 @@ class Config:
     # Z dimension
     z_dim: int = ARGS.z_dim or 200
     # Alpha value
-    alpha: float = ARGS.alpha or 0.01
+    alpha: float = ARGS.alpha or 0.00
     # stride used for evaluation windows
     stride: float = ARGS.stride or 0.2
     # Dataset size
@@ -147,11 +150,11 @@ class Config:
     # Evaluation window maximum
     eval_max_size: int = 64
     # Uses h5 instead of the imagenet files
-    use_h5: bool = True if ARGS.use_h5 is None else ARGS.use_h5
+    use_h5: bool = False #if ARGS.use_h5 is None else ARGS.use_h5
     # Debug mode prints several statistics
     debug_mode: bool = False if ARGS.debug_mode is None else ARGS.debug_mode
     # Dataset for evaluation
-    eval_dataset: str = ARGS.eval_dataset or 'ppb'
+    eval_dataset: str = 'fairface' #ARGS.eval_dataset or 'ppb'
     # Images to save
     save_sub_images: bool = False if ARGS.save_sub_images is None else ARGS.save_sub_images
     # Hist size
