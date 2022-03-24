@@ -344,8 +344,8 @@ class Trainer:
             avg_loss += loss.item()
             avg_acc += acc
 
-            if i % self.eval_freq == 0:
-                logger.info(f"Training: batch:{i} accuracy:{acc}")
+            # if i % self.eval_freq == 0:
+                # logger.info(f"Training: batch:{i} accuracy:{acc}")
 
             count = i
 
